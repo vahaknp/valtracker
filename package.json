@@ -1,0 +1,12 @@
+{
+  "name": "rippled-proxy",
+  "version": "0.0.1",
+  "description": "Connects with rippled to provide data for visualization",
+  "dependencies": {
+    "socket.io": "^1.0.6",
+	"ripple-lib": "*",
+	"express": "*",
+	"sqlite3": "*",
+	"better-console": "*"
+  }
+}
