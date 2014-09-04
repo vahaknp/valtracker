@@ -44,7 +44,7 @@ function monitorFile(filename) {
 }
 
 // Get logs from "debug.log".
-monitorFile("/home/ubuntu/rippledavid/log/debug.log");
+monitorFile("/home/../var/log/rippled/debug.log");
 
 //Sift through log entries and pick out those which have the validation fingerprint.
 // Template: DATE, TIME, "Validations:DBG", "Val", "for", FOR_CODE, "from", FROM_CODE, "added", TRUSTED/NOT
@@ -64,7 +64,7 @@ function handleLogEntry(le) {
 			//If it does not exist:
 			if (row == undefined){
 				//Initiate pk entry. Set first_ping and last_ping to datetime and downtime to 0.
-				db.run("INSERT INTO connections (validator_pk, first_ping, last_ping, downtime, trusted) VALUES ('"+public_key+"', '"+datetime+"', '"+datetime+"', '0', '"+trusted+"');");
+				insert_new_pk(public_key, datetime, trusted);
 			}
 			else{
 				//If it exists:
@@ -75,12 +75,12 @@ function handleLogEntry(le) {
 					//Add downtime to total.
 					total_dt = row.downtime + seconds_between_dates - negligable_time;
 					//Update total in db.
-					db.run("UPDATE connections SET last_ping = '"+datetime+"', downtime = '"+total_dt+"'  WHERE id = '"+row.id+"';");
+					update_downtime(datetime, total_dt, row.id);
 				}
 				//If it is negligable:
 				else{	
 					//Update last ping
-					db.run("UPDATE connections SET last_ping = '"+datetime+"' WHERE id = '"+row.id+"';");
+					update_last_ping(datetime,row.id);
 				}		
 			}
 		});
@@ -104,6 +104,18 @@ function handleLogEntry(le) {
 	}
 	
 	
+}
+
+function update_last_ping(ping_datetime, id){
+	db.run("UPDATE connections SET last_ping = '"+ping_datetime+"' WHERE id = '"+id+"';")
+}
+
+function update_downtime(ping_datetime, total_dt, id){
+	db.run("UPDATE connections SET last_ping = '"+ping_datetime+"', downtime = '"+total_dt+"'  WHERE id = '"+id+"';");
+}
+
+function insert_new_pk(public_key, ping_datetime, trusted){
+	db.run("INSERT INTO connections (validator_pk, first_ping, last_ping, downtime, trusted) VALUES ('"+public_key+"', '"+ping_datetime+"', '"+ping_datetime+"', '0', '"+trusted+"');");
 }
 
 //Function to calculate difference in seconds between two dates.
