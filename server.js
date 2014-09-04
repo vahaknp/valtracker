@@ -1,5 +1,4 @@
 var PORT = 8000;
-var http = require('http');
 var sqlite3 = require('sqlite3').verbose();
 var db = new sqlite3.Database('./database.db');
 var express = require('express');
@@ -51,12 +50,9 @@ monitorFile("/home/../var/log/rippled/debug.log");
 function handleLogEntry(le) {
 	if (le.indexOf("Validations:DBG Val") > 0) {
 		leSplit = le.split(" ");
-		var date = leSplit[0];
-		var time = leSplit[1];
-		var ledger_key = leSplit[5];
-		var public_key = leSplit[7];
-		var trusted = leSplit[9];
-		var datetime = date+" "+time;
+		var date = leSplit[0], time = leSplit[1], ledger_key = leSplit[5]; 
+		var public_key = leSplit[7], trusted = leSplit[9];
+		var ping_datetime = date+" "+time;
 		var total_dt = 0, seconds_between_dates = 0, lifetime = 0, health = 0;
 
 		//Check whether public key exists in table.
@@ -64,23 +60,23 @@ function handleLogEntry(le) {
 			//If it does not exist:
 			if (row == undefined){
 				//Initiate pk entry. Set first_ping and last_ping to datetime and downtime to 0.
-				insert_new_pk(public_key, datetime, trusted);
+				insert_new_pk(public_key, ping_datetime, trusted);
 			}
 			else{
 				//If it exists:
 				//Calculate time btween last ping and current ping.
-				seconds_between_dates = time_diff(row.last_ping, datetime);
+				seconds_between_dates = time_diff(row.last_ping, ping_datetime);
 				//If time between last ping and current ping is greater than the negligable time:
 				if (seconds_between_dates > negligable_time){
 					//Add downtime to total.
 					total_dt = row.downtime + seconds_between_dates - negligable_time;
 					//Update total in db.
-					update_downtime(datetime, total_dt, row.id);
+					update_downtime(ping_datetime, total_dt, row.id);
 				}
 				//If it is negligable:
 				else{	
 					//Update last ping
-					update_last_ping(datetime,row.id);
+					update_last_ping(ping_datetime,row.id);
 				}		
 			}
 		});
@@ -106,14 +102,17 @@ function handleLogEntry(le) {
 	
 }
 
+//Utility functions
+
+//Updates last ping
 function update_last_ping(ping_datetime, id){
 	db.run("UPDATE connections SET last_ping = '"+ping_datetime+"' WHERE id = '"+id+"';")
 }
-
+//Updates downtime and last ping
 function update_downtime(ping_datetime, total_dt, id){
 	db.run("UPDATE connections SET last_ping = '"+ping_datetime+"', downtime = '"+total_dt+"'  WHERE id = '"+id+"';");
 }
-
+//Create new entry for public key
 function insert_new_pk(public_key, ping_datetime, trusted){
 	db.run("INSERT INTO connections (validator_pk, first_ping, last_ping, downtime, trusted) VALUES ('"+public_key+"', '"+ping_datetime+"', '"+ping_datetime+"', '0', '"+trusted+"');");
 }
