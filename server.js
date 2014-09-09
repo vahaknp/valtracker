@@ -9,7 +9,7 @@ var console = require("better-console");
 var negligable_time = 5;
 
 //Restarting database in to account for script not running
-db.run("DROP TABLE IF EXISTS connections;");
+//db.run("DROP TABLE IF EXISTS connections;");
 
 //Create table if it doesn't exist yet.
 db.serialize(function() {
@@ -43,64 +43,64 @@ function monitorFile(filename) {
 }
 
 // Get logs from "debug.log".
-monitorFile("/home/../var/log/rippled/debug.log");
+monitorFile("../log/validations.log");
 
 //Sift through log entries and pick out those which have the validation fingerprint.
 // Template: DATE, TIME, "Validations:DBG", "Val", "for", FOR_CODE, "from", FROM_CODE, "added", TRUSTED/NOT
 function handleLogEntry(le) {
-	if (le.indexOf("Validations:DBG Val") > 0) {
-		leSplit = le.split(" ");
-		var date = leSplit[0], time = leSplit[1], ledger_key = leSplit[5]; 
-		var public_key = leSplit[7], trusted = leSplit[9];
-		var ping_datetime = date+" "+time;
-		var total_dt = 0, seconds_between_dates = 0, lifetime = 0, health = 0;
-
-		//Check whether public key exists in table.
-		db.get("SELECT * FROM connections WHERE validator_pk ='"+public_key+"';", function(err, row){
-			//If it does not exist:
-			if (row == undefined){
-				//Initiate pk entry. Set first_ping and last_ping to datetime and downtime to 0.
-				insert_new_pk(public_key, ping_datetime, trusted);
+	console.log(le);
+	le = JSON.parse(le);
+	var public_key = le.public_key;
+	var ping_datetime = le.ping_datetime;
+	var trusted = le.trusted;
+	var total_dt = 0, seconds_between_dates = 0, lifetime = 0, health = 0;
+	console.log("params:", public_key, trusted, ping_datetime);
+	//Check whether public key exists in table.
+	db.get("SELECT * FROM connections WHERE validator_pk ='"+public_key+"';", function(err, row){
+		//If it does not exist:
+		if (row == undefined){
+			//Initiate pk entry. Set first_ping and last_ping to datetime and downtime to 0.
+			insert_new_pk(public_key, ping_datetime, trusted);
+		}
+		else{
+			//If it exists:
+			//Calculate time btween last ping and current ping.
+			seconds_between_dates = time_diff(row.last_ping, ping_datetime);
+			//If time between last ping and current ping is greater than the negligable time:
+			if (seconds_between_dates > negligable_time){
+				//Add downtime to total.
+				total_dt = row.downtime + seconds_between_dates - negligable_time;
+				//Update total in db.
+				update_downtime(ping_datetime, total_dt, row.id);
 			}
-			else{
-				//If it exists:
-				//Calculate time btween last ping and current ping.
-				seconds_between_dates = time_diff(row.last_ping, ping_datetime);
-				//If time between last ping and current ping is greater than the negligable time:
-				if (seconds_between_dates > negligable_time){
-					//Add downtime to total.
-					total_dt = row.downtime + seconds_between_dates - negligable_time;
-					//Update total in db.
-					update_downtime(ping_datetime, total_dt, row.id);
-				}
-				//If it is negligable:
-				else{	
-					//Update last ping
-					update_last_ping(ping_datetime,row.id);
-				}		
-			}
-		});
+			//If it is negligable:
+			else{	
+				//Update last ping
+				update_last_ping(ping_datetime,row.id);
+			}		
+		}
+	});
 
-		//Print all
-		console.clear();
-		console.log("Threshold:", negligable_time+"s");
-		console.log("ID ------------------------- PK ------------------------- H -- Upd -- DT ----- Trusted ------");
-		db.all("SELECT * FROM connections;", function(err, entries){
-			for (var i = 0; i < entries.length; i++){ 
-				var row = entries[i];
-				var now = new Date();
-				total_dt = row.downtime;
-				lifetime = Math.round(time_diff(row.first_ping, now));
-				health = Math.round(((lifetime-total_dt)/lifetime)*100);
-				diff = Math.round(time_diff(row.last_ping, now));
-				console.log(row.id, row.validator_pk, health+"%   "+diff+"s   "+total_dt+"/"+lifetime, row.trusted);
-			}
-		});
+	//Print all
+	console.clear();
+	console.log("Threshold:", negligable_time+"s");
+	console.log("ID ------------------------- PK ------------------------- H -- Upd -- DT ----- Trusted ------");
+	db.all("SELECT * FROM connections;", function(err, entries){
+		for (var i = 0; i < entries.length; i++){ 
+			var row = entries[i];
+			var now = row.last_ping; 
+			total_dt = row.downtime;
+			lifetime = Math.round(time_diff(row.first_ping, now));
+			health = Math.round(((lifetime-total_dt)/lifetime)*100);
+			diff = Math.round(time_diff(row.last_ping, now));
+			console.log(row.id, row.validator_pk, health+"%   "+diff+"s   "+total_dt+"/"+lifetime, row.trusted);
+		}
+	});
 
-	}
-	
-	
 }
+	
+	
+
 
 //Utility functions
 
