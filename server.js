@@ -48,41 +48,45 @@ monitorFile("../log/validations.log");
 //Sift through log entries and pick out those which have the validation fingerprint.
 // Template: DATE, TIME, "Validations:DBG", "Val", "for", FOR_CODE, "from", FROM_CODE, "added", TRUSTED/NOT
 function handleLogEntry(le) {
-	console.log(le);
 	le = JSON.parse(le);
 	var public_key = le.public_key;
 	var ping_datetime = le.ping_datetime;
 	var trusted = le.trusted;
 	var total_dt = 0, seconds_between_dates = 0, lifetime = 0, health = 0;
-	console.log("params:", public_key, trusted, ping_datetime);
 	//Check whether public key exists in table.
 	db.get("SELECT * FROM connections WHERE validator_pk ='"+public_key+"';", function(err, row){
 		//If it does not exist:
 		if (row == undefined){
 			//Initiate pk entry. Set first_ping and last_ping to datetime and downtime to 0.
 			insert_new_pk(public_key, ping_datetime, trusted);
+			console.log("Didn't find:", public_key);
 		}
 		else{
 			//If it exists:
-			//Calculate time btween last ping and current ping.
-			seconds_between_dates = time_diff(row.last_ping, ping_datetime);
-			//If time between last ping and current ping is greater than the negligable time:
-			if (seconds_between_dates > negligable_time){
-				//Add downtime to total.
-				total_dt = row.downtime + seconds_between_dates - negligable_time;
-				//Update total in db.
-				update_downtime(ping_datetime, total_dt, row.id);
+			//Check whether ping is old:
+			if (row.last_ping<ping_datetime){
+				//Calculate time btween last ping and current ping.
+				seconds_between_dates = time_diff(row.last_ping, ping_datetime);
+				//If time between last ping and current ping is greater than the negligable time:
+				if (seconds_between_dates > negligable_time){
+					//Add downtime to total.
+					total_dt = row.downtime + seconds_between_dates - negligable_time;
+					//Update total in db.
+					update_downtime(ping_datetime, total_dt, row.id);
+					console.log((seconds_between_dates - negligable_time)+"s to "+row.id+" because "+ row.last_ping+" - "+ping_datetime+" total: "+total_dt);
+				}
+				//If it is negligable:
+				else{	
+					//Update last ping
+					update_last_ping(ping_datetime,row.id);
+				}		
 			}
-			//If it is negligable:
-			else{	
-				//Update last ping
-				update_last_ping(ping_datetime,row.id);
-			}		
 		}
 	});
 
 	//Print all
-	console.clear();
+
+	/*console.clear();
 	console.log("Threshold:", negligable_time+"s");
 	console.log("ID ------------------------- PK ------------------------- H -- Upd -- DT ----- Trusted ------");
 	db.all("SELECT * FROM connections;", function(err, entries){
@@ -95,7 +99,8 @@ function handleLogEntry(le) {
 			diff = Math.round(time_diff(row.last_ping, now));
 			console.log(row.id, row.validator_pk, health+"%   "+diff+"s   "+total_dt+"/"+lifetime, row.trusted);
 		}
-	});
+	});*/
+
 
 }
 	
