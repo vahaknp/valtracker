@@ -6,6 +6,8 @@ var app = express();
 var console = require("better-console");
 var sys = require('sys');
 
+var exec = require('child_process').exec;
+function puts(error, stdout, stderr) {sys.puts(stdout)};
 
 //Go through log file and seperate lines into log entries.
 var spawn = require('child_process').spawn;
@@ -26,6 +28,10 @@ function monitorFile(filename) {
         });
 }
 
+//Delete everything in master log file for testing
+temp_path = "/Users/vahakn/Documents/log/validations.log";
+exec("echo '' | ssh vahakn@10.15.20.166 'cat /dev/null > "+temp_path+"'");
+
 // Get logs from "debug.log".
 monitorFile("/home/../var/log/rippled/debug.log");
 
@@ -42,13 +48,13 @@ function handleLogEntry(le) {
                 val_package.public_key = leSplit[7];
                 val_package.trusted = leSplit[9];
                 val_package.ping_datetime = ping_datetime;
+		val_package.ping_id = 1;
                 //Master log file's path on main server.
                 var log_path = "/Users/vahakn/Documents/log/validations.log";
                 //Write to master log file through ssh.
-                var exec = require('child_process').exec;
-                function puts(error, stdout, stderr) {sys.puts(stdout)};
-                exec("echo '"+JSON.stringify(val_package)+"' | ssh vahakn@10.15.20.166 'cat >> "+log_path+"'", puts);
-                console.log("Sent.");
+                exec("echo '"+JSON.stringify(val_package)+"' | ssh vahakn@10.15.20.166 'cat >> "+log_path+"'");
+                console.log(JSON.stringify(val_package));
+
         }
 
 
