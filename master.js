@@ -4,6 +4,7 @@ var app = express();
 var console = require('better-console');
 var mongoose = require('mongoose');
 var async = require('async');
+var prompt = require('prompt');
 
 //Connect to database.
 mongoose.connect('mongodb://localhost/test');
@@ -17,62 +18,89 @@ var validatorSchema = mongoose.Schema({
 		pinger: Number
 });
 
-
-// --- Main --- //
-//Open database.
+//Open database and ask for prompts.
 db.on('error', console.error.bind(console, 'Connection Error:'));
 db.once('open', function callback () {
-	console.log('Connected');
-
-	// Get logs from "debug.log".
-	setInterval(function(){
-		monitorFile("../log/validations.log")
-	},10);
-
-	//Query for uptime.
-	setInterval(function(){
-		mongoose.connection.db.collectionNames(function (err, names) {
-			var start = '2014-Sep-8 21:42:42';
-			var end = '2014-Sep-12 1:42:42';
+	async.waterfall([
+		//Prompts
+		function(callback){
 			console.clear();
-			for (var i=0; i<names.length; i++){
-				name = names[i].name;
-				if (name != "test.system.indexes"){
-					async.series([
-						function(callback){
-							pk = name.substr(name.indexOf('.')+1);
-							callback(null, pk);
-						},
-						function(callback){
-							var Validator = mongoose.model(pk,validatorSchema, pk);
-							Validator.find({ping_datetime:{"$gte": start, "$lt": end}}).sort('ping_datetime').exec(function(err, pings) {
-								//Calculate downtime and lifetime.
-								results = findDowntime(pings);
-								callback(null, results);
+			console.log('Connected to database.');
+			console.log('');
+			console.log('Please enter the a threshold after which downtime should start being ');
+			console.log('recorded and a time interval during which you want to know the downtime.')
+			console.log('The date format is: yyyy-mm-dd hh-mm-ss.')
+			console.log('Input "all" for no upper or lower bound.');
+			prompt.start();
+			prompt.get(['threshold', 'start_date', 'end_date'], function(err, result){
+				console.log(result);
+				if (result.start_date == 'all'){
+					start = '2000-Jan-1 9:00:00';
+				}
+				else{
+					start = result.start_date;
+				}
+				if (result.end_date == 'all'){
+					end = '2042-Jan-1 9:00:00';
+				}
+				else{
+					end = result.end_date;
+				}
+				var negligable_time = result.threshold;
+				callback(null, start, end, negligable_time);
+			});
+		},
+		//Main
+		function(start,end,negligable_time,callback){
+			negligable_time = negligable_time;
+			// Get logs from "debug.log".
+			setInterval(function(){
+				monitorFile("../log/validations.log")
+			},10);
+
+			//Query for uptime and display
+			setInterval(function(){
+				//Loop through collection names = all the public_keys that have been seen
+				mongoose.connection.db.collectionNames(function (err, names) {
+					console.clear();
+					console.log("------------------------PK-------------------------- u - d - h ----- trusted? -----");
+					for (var i=0; i<names.length; i++){
+						name = names[i].name;
+						if (name != "test.system.indexes"){
+							async.series([
+								//Get name
+								function(callback){
+									pk = name.substr(name.indexOf('.')+1);
+									callback(null, pk);
+								},
+								//Get all pings between given start and end dates, sorted
+								function(callback){
+									var Validator = mongoose.model(pk,validatorSchema, pk);
+									Validator.find({ping_datetime:{"$gte": start, "$lt": end}}).sort('ping_datetime').exec(function(err, pings) {
+										//Calculate downtime and lifetime.
+										result = findDowntime(pings, negligable_time);
+										callback(null, result);
+									});
+								}
+							],
+							//Return results
+							function (err, result){
+								console.log(result[0], result[1]);
 							});
 						}
-					],
-					function (err, result){
-						console.log(result[0], result[1]);
-					});
-				}
-			}
-		});
-	}, 1000);
-
+					}
+				});
+			}, 1000);
+		}
+	], function(err, result){});
 });
 
-// ------------ //
-
-
-
-// - Utility - //
-var sys = require('sys');
-var exec = require('child_process').exec;
-
 //Go through log file and seperate lines into log entries.
-var spawn = require('child_process').spawn;
+//Read first line then delete
 function monitorFile(filename) {
+		var sys = require('sys');
+		var exec = require('child_process').exec;
+		var spawn = require('child_process').spawn;
 		var cmd = spawn("head", ["-n 1",filename]);
 		cmd.stderr.on("data", function(data){
 				console.log('stderr: ' + data);
@@ -89,7 +117,7 @@ function monitorFile(filename) {
 
 
 //Sift through log entries and pick out those which have the validation fingerprint.
-// Template: DATE, TIME, "Validations:DBG", "Val", "for", FOR_CODE, "from", FROM_CODE, "added", TRUSTED/NOT
+//Template: DATE, TIME, "Validations:DBG", "Val", "for", FOR_CODE, "from", FROM_CODE, "added", TRUSTED/NOT
 function handleLogEntry(le) {
 	le = JSON.parse(le);
 	var public_key = le.public_key;
@@ -97,40 +125,42 @@ function handleLogEntry(le) {
 	var trusted = le.trusted;
 	var pinger = le.ping_id;
 	
+	//Make sure data is not corrupted
 	if (public_key == undefined || ping_datetime == undefined || trusted == undefined || pinger == undefined){
 		return;
 	}
 
+	//Save to database.
 	var Validator = mongoose.model(public_key,validatorSchema, public_key);
-
 	var ping = new Validator({pk: public_key, ping_datetime: ping_datetime, trusted: trusted, pinger: pinger})
 	ping.save(function(err, ping){
 		if (err) return console.error(err);
-		//console.log("Added "+ ping);
 	});
 };
 
 //Finds downtime given a list of json objects of pings
-function findDowntime(pings){
+function findDowntime(pings, neg){
+	if (pings.length == 0){
+		return (0+"   "+0+" "+" "+" 0 "+" "+" "+" "+" "+" "+" "+" "+" "+" x ");
+	}
 	var lifetime = 0;
 	var health = 0;
+	var total_dt = 0;
 	var start_date = pings[0].ping_datetime;
 	var end_date = pings[pings.length-1].ping_datetime;
 	lifetime = time_diff(start_date, end_date);
-
-	var total_dt = 0;
-	var negligable_time = 5;
+	//Iterate through pings and add to downtime 
+	//if interval is longer than the given threshold
 	for (var i=1; i<pings.length; i++){
 		now = pings[i].ping_datetime;
 		last = pings[i-1].ping_datetime;
 		diff = time_diff(now, last);
-		if (diff > negligable_time){
-			total_dt += diff - negligable_time;
+		if (diff > neg){
+			total_dt += diff - neg;
 		}
 	}
 	health = (lifetime - total_dt)/lifetime;
 	return total_dt+" "+lifetime+" "+Math.round(health*100)+"% "+pings[0].trusted;
-	//return pings.length;
 }
 
 //Function to calculate difference in seconds between two dates.
