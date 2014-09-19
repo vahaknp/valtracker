@@ -1,13 +1,10 @@
-var PORT = 3000;
-var express = require('express');
-var app = express();
 var console = require('better-console');
 var mongoose = require('mongoose');
 var async = require('async');
 var prompt = require('prompt');
 
 //Connect to database.
-mongoose.connect('mongodb://localhost/test');
+mongoose.connect('mongodb://localhost/validations');
 var db = mongoose.connection;
 
 //Define Schema of collections.
@@ -22,24 +19,25 @@ var validatorSchema = mongoose.Schema({
 db.on('error', console.error.bind(console, 'Connection Error:'));
 db.once('open', function callback () {
 	async.waterfall([
-		//Prompts
+		//Prompt for parameters
 		function(callback){
 			console.clear();
 			console.log('Connected to database.');
 			console.log('');
 			console.log('Please enter the a threshold after which downtime should start being ');
-			console.log('recorded and a time interval during which you want to know the downtime.')
-			console.log('The date format is: yyyy-mm-dd hh-mm-ss.')
+			console.log('recorded and a time interval during which you want to know the downtime.');
+			console.log('The date format is: yyyy-mm-dd hh-mm-ss.');
 			console.log('Input "all" for no upper or lower bound.');
 			prompt.start();
 			prompt.get(['threshold', 'start_date', 'end_date'], function(err, result){
-				console.log(result);
+				//Date far enough into past. Replace with -infinity date.
 				if (result.start_date == 'all'){
 					start = '2000-Jan-1 9:00:00';
 				}
 				else{
 					start = result.start_date;
 				}
+				//Date far enough into the future. Replace with +infinity date.
 				if (result.end_date == 'all'){
 					end = '2042-Jan-1 9:00:00';
 				}
@@ -55,7 +53,7 @@ db.once('open', function callback () {
 			negligable_time = negligable_time;
 			// Get logs from "debug.log".
 			setInterval(function(){
-				monitorFile("../log/validations.log")
+				monitorFile("../log/validations.log");
 			},10);
 
 			//Query for uptime and display
@@ -66,7 +64,7 @@ db.once('open', function callback () {
 					console.log("------------------------PK-------------------------- u - d - h ----- trusted? -----");
 					for (var i=0; i<names.length; i++){
 						name = names[i].name;
-						if (name != "test.system.indexes"){
+						if (name != "validations.system.indexes"){
 							async.series([
 								//Get name
 								function(callback){
@@ -126,21 +124,21 @@ function handleLogEntry(le) {
 	var pinger = le.ping_id;
 	
 	//Make sure data is not corrupted
-	if (public_key == undefined || ping_datetime == undefined || trusted == undefined || pinger == undefined){
+	if (public_key === undefined || ping_datetime === undefined || trusted === undefined || pinger === undefined){
 		return;
 	}
 
 	//Save to database.
 	var Validator = mongoose.model(public_key,validatorSchema, public_key);
-	var ping = new Validator({pk: public_key, ping_datetime: ping_datetime, trusted: trusted, pinger: pinger})
+	var ping = new Validator({pk: public_key, ping_datetime: ping_datetime, trusted: trusted, pinger: pinger});
 	ping.save(function(err, ping){
 		if (err) return console.error(err);
 	});
-};
+}
 
 //Finds downtime given a list of json objects of pings
 function findDowntime(pings, neg){
-	if (pings.length == 0){
+	if (pings.length === 0){
 		return (0+"   "+0+" "+" "+" 0 "+" "+" "+" "+" "+" "+" "+" "+" "+" x ");
 	}
 	var lifetime = 0;
@@ -171,6 +169,3 @@ function time_diff(date1, date2){
 	var seconds_between_dates = Math.abs(diff/1000);
 	return seconds_between_dates;
 }
-
-app.listen(PORT);
-console.log("Listening at 127.0.0.1:"+PORT);
