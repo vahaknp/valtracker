@@ -1,0 +1,20 @@
+body {
+	padding: 5px;
+	font: 14px "Lucida Grande", Helvetica, Arial, sans-serif;
+}
+
+td{
+	padding: 2px 10px;
+}
+
+#range{
+	padding: 10px;
+}
+
+form{
+	padding: 10px;
+}
+
+h1{
+	padding:10px;
+}

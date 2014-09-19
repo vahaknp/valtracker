@@ -1,0 +1,14 @@
+//IP address of master and path to master log
+exports.master_config = {
+  ip : 'vahakn@10.15.20.180',
+  master_path : '/Users/vahakn/Documents/log/validations.log'
+}
+
+//Negligible time, after which downtime is added
+exports.negTime = 5;
+
+//hbase credentials
+exports.hbase = {
+  host: '54.84.103.243',
+  port: 20550
+};

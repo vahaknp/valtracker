@@ -1,0 +1,39 @@
+extends layout
+
+block content
+	h1.
+		Validator Health List
+	form#formAddUser(name="range",method="post",action="/")
+		input#inputUserName(type="text", placeholder="From:", name="start")
+		input#inputUserEmail(type="text", placeholder="To:", name="end")
+		button#btnSubmit(type="submit") Submit
+	#range
+		= 'From ' + dates[0] + ' to ' + dates[1]
+	div
+		table
+			thead
+				tr
+					td 
+						= 'Key'
+					td 
+						= 'Health'
+					td 
+						= 'Downtime'
+					td 
+						= 'Lifetime'
+					td 
+						= 'Trusted'
+			tbody
+				each val, i in vallist
+					tr
+						td
+							= val.key
+						td
+							= val.health + '%'
+						td
+							= val.downtime + 's'
+						td
+							= val.lifetime + 's'
+						td
+							= val.trusted
+

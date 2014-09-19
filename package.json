@@ -1,16 +1,14 @@
 {
   "name": "rippled-proxy",
   "version": "0.0.1",
-  "description": "Connects with rippled to provide data for visualization",
+  "description": "Connects with rippled to determine health of validators",
   "dependencies": {
     "async": "^0.9.0",
-    "better-console": "*",
-    "express": "*",
-    "mongodb": "*",
-    "mongoose": "^3.8.16",
-    "prompt": "^0.2.13",
-    "ripple-lib": "*",
-    "socket.io": "^1.0.6",
-    "sqlite3": "*"
+    "body-parser": "^1.9.2",
+    "express": "^4.10.2",
+    "hbase": "^0.1.7",
+    "hbase-client": "^1.2.0",
+    "jade": "^1.7.0",
+    "moment": "^2.8.3",
   }
 }
